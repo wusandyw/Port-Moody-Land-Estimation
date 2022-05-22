@@ -1,0 +1,178 @@
+---
+title: "STAT410 Project"
+author: "Sandy Wu 301273729"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(survey)
+library(ggplot2)
+```
+
+```{r}
+parcel = read.csv("Parcel_Information.csv", header = TRUE)
+
+parcel.clean1 = parcel %>% distinct(gislink, .keep_all = TRUE) %>% na.omit(address)
+parcel.clean2 = filter(parcel.clean1, house !=0)
+
+parcel.clean = parcel.clean2
+```
+
+
+Port Moody: Total private dwellings = 13318 (from STAT CANADA)
+
+testing with small sample
+```{r}
+set.seed(1234)
+
+sample1 = parcel.clean[sample(nrow(parcel.clean),10),]
+
+#pilot.data = data.frame(address = sample1$address)
+#pilot.data$price=0
+#write.csv(pilot.data, "pilotdat.csv")
+
+pilot.data = read.csv("pilotdat.csv", header = TRUE)
+
+pilot.data$totaldwellings = 12968
+
+pilot.design = svydesign(data=pilot.data, ids=~1,
+                         variables=~price,
+                         fpc=~totaldwellings)
+
+p.est.totals = svytotal(~price, pilot.design)
+p.est.totals
+
+```
+
+est. total price = 1.3881e+10 = $13,881,000,000
+
+sample size
+```{r}
+N = 5197
+z = 1.96
+n = 10
+e = 1000
+
+p.mean = mean(pilot.data$price)
+p.s2 = 1/(n-1) * sum((pilot.data$price - p.mean)^2)
+p.var = (1-n/N) * p.s2/n
+
+((N^2)*(z^2)* p.s2)/(e^2 + N *(z^2)*p.s2)
+# basically wants us to take a sample size of the cleaned data size
+# too time consuming to do over 5,000 data inputs by hand
+
+(z^2*0.5*0.5)/(0.05^2)
+# sample size 385 for a proportion
+
+
+min.n=28+25*((sum((pilot.data$price - p.mean)^3))/(N*sqrt(p.s2)^3))^2
+# Cochran's rule for sample size needed for the normal approximation to be adequate
+min.n
+
+p.e = z * sqrt(N^2 * (1-n/N) * p.s2^2/n)
+p.e
+
+```
+
+
+
+
+
+
+full sample
+```{r}
+n = 385
+set.seed(123)
+
+full.samp = parcel.clean[sample(nrow(parcel.clean),n),]
+full.samp = subset(full.samp, select=c(address))
+full.samp$price=0
+#write.csv(full.samp, "fullsamp.csv")
+```
+
+```{r}
+set.seed(123)
+full.samp.all = parcel.clean[sample(nrow(parcel.clean),n),]
+```
+
+3275 MURRAY ST : worth only $1 in terms of BC Assessment (it's not a building but is some section of a street?) might remove due to outlier
+
+100 FOREST PARK WAY : no data
+
+3002 MURRAY ST : no data
+
+644 BENTLEY RD : no data
+
+
+```{r}
+fulldat = read.csv("fullsamp.csv", header = TRUE)
+
+ggplot(data=fulldat, aes(X, price))+geom_point()
+```
+
+Can see that there are some points that should be removed due to no data/outlier
+
+```{r}
+fulldat2 = filter(fulldat, price !=0)
+fulldat3 = filter(fulldat2, price !=1)
+```
+
+```{r}
+ggplot(data=fulldat3, aes(X, price))+geom_point(alpha=0.4)
+
+full.street = cbind(fulldat, street=full.samp.all$street)
+ggplot(data=full.street, aes(street, price))+geom_point(alpha=0.4)+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+full.size = cbind(fulldat, size=as.numeric(full.samp.all$lot_size))
+ggplot(data=full.size, aes(size, price))+geom_point(alpha=0.4)
+```
+
+
+
+```{r}
+fulldat3$totaldwellings=12968
+full.des = svydesign(data=fulldat3, ids=~1,
+                         variables=~price,
+                         fpc=~totaldwellings)
+est.totals = svytotal(~price, full.des)
+est.totals
+
+```
+
+Estimated total population price = 1.5999e+10 = $15,999,000,000
+
+```{r}
+p.est.totals
+est.totals
+```
+
+Standard errors are a lot better after taking a larger sample.
+
+```{r}
+confint(est.totals)
+```
+
+
+```{r}
+N=12968
+n=381
+z=1.96
+
+f.mean = mean(fulldat3$price)
+f.s2 = svyvar(~price,full.des)
+
+e = z * sqrt(N^2 * (1-n/N) * f.s2[1]^2/n)
+e
+
+```
+
+margin of error is a lot higher
+
+```{r}
+(1192000*3930)+(615000*(1910+7125))
+```
+
+
